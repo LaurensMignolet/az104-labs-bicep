@@ -1,32 +1,33 @@
-param location string = resourceGroup().location
+param location string
 
 param adminUsername string
 param adminPassword string
 param vmSize string = 'Standard_D2s_v3'
 
-param numberOfVMs int = 2
+param num int 
 
-
-resource virtualNetwork 'Microsoft.Network/virtualNetworks@2019-11-01' = {
-  name: 'az104-04-vnet1'
+resource vnet 'Microsoft.Network/virtualNetworks@2019-11-01' = {
+  name: 'az104-05-vnet${num}'
   location: location
   properties: {
     addressSpace: {
       addressPrefixes: [
-        '10.40.0.0/20'
+        '10.5${num}.0.0/22'
       ]
     }
-    subnets: [for i in range(0, numberOfVMs) : {
-        name: 'Subnet${i}'
+    subnets: [
+      {
+        name: 'Subnet0'
         properties: {
-          addressPrefix: '10.40.${i}.0/24'
+          addressPrefix: '10.5${num}.0.0/24'
         }
-      }]
+      }
+    ]
   }
 }
 
-resource publicIPAddresses 'Microsoft.Network/publicIPAddresses@2019-11-01' = [for i in range(0, numberOfVMs): {
-  name: 'az104-04-pip${i}'
+resource pip 'Microsoft.Network/publicIPAddresses@2019-11-01' =  {
+  name: 'az104-05-pip${num}'
   location: location
   sku: {
     name: 'Standard'
@@ -35,10 +36,11 @@ resource publicIPAddresses 'Microsoft.Network/publicIPAddresses@2019-11-01' = [f
     publicIPAllocationMethod: 'Static'
 
   }
-}]
+}
+
 
 resource nsg01 'Microsoft.Network/networkSecurityGroups@2019-11-01' = {
-  name: 'az104-04-nsg01'
+  name: 'az104-05-nsg${num}'
   location: location
   properties: {
     securityRules: [
@@ -60,8 +62,9 @@ resource nsg01 'Microsoft.Network/networkSecurityGroups@2019-11-01' = {
   }
 }
 
-resource nics 'Microsoft.Network/networkInterfaces@2020-11-01' = [for i in range(0, numberOfVMs): {
-  name: 'az104-04-nic${i}'
+
+resource nic 'Microsoft.Network/networkInterfaces@2020-11-01' = {
+  name: 'az104-05-nic${num}'
   location: location
   properties: {
     networkSecurityGroup: {
@@ -73,24 +76,25 @@ resource nics 'Microsoft.Network/networkInterfaces@2020-11-01' = [for i in range
         properties: {
           privateIPAllocationMethod: 'Dynamic'
           subnet: {
-            id: virtualNetwork.properties.subnets[i].id
+            id: vnet.properties.subnets[0].id
           }
 
           publicIPAddress: {
-            id: publicIPAddresses[i].id
+            id: pip.id
           }          
         }
       }
     ]
   }
-}]
+}
 
-resource vms 'Microsoft.Compute/virtualMachines@2021-11-01' = [for i in range(0, numberOfVMs): {
-  name: 'az104-04-vm${i}'
+
+resource vms 'Microsoft.Compute/virtualMachines@2021-11-01' = {
+  name: 'az104-05-vm${num}'
   location: location
   properties: {
     osProfile: {
-      computerName: 'az104-04-vm${i}'
+      computerName: 'az104-05-vm${num}'
       adminUsername: adminUsername
       adminPassword: adminPassword
       windowsConfiguration: {
@@ -121,48 +125,12 @@ resource vms 'Microsoft.Compute/virtualMachines@2021-11-01' = [for i in range(0,
           properties: {
             primary: true
           }
-          id: nics[i].id
+          id: nic.id
         }
       ]
     }
   }
-}]
-
-
-resource privateDnsZone 'Microsoft.Network/privateDnsZones@2020-06-01' = {
-  name: 'contoso.org'
-  location: 'global'
-
 }
 
-resource vnetDnsLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2020-06-01' = {
-  name: 'az104-04-vnet1-link'
-  location: 'global'
-  parent: privateDnsZone
-  properties: {
-    registrationEnabled: true
-    virtualNetwork: {
-      id: virtualNetwork.id
-    }
-  }
-}
-
-//contosocorp20220524
-
-resource dns 'Microsoft.Network/dnsZones@2018-05-01' = {
-  name: 'contosocorp20220524.com'
-  location: 'global'
-}
-
-resource record 'Microsoft.Network/dnsZones/A@2018-05-01' = [for i in range(0, numberOfVMs): {
-  parent: dns
-  name: 'az104-04-vm${i}'
-  properties: {
-    TTL: 3600
-    ARecords: [
-      {
-        ipv4Address: publicIPAddresses[i].properties.ipAddress
-      }
-    ]
-  }
-}]
+output vnetName string = vnet.name
+output vnetId string = vnet.id
